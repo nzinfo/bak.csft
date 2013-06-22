@@ -206,3 +206,5 @@ configure.ac
 COPYING
 INSTALL
 smoke.sh
+src/py_layer.h
+src/py_layer.cpp
