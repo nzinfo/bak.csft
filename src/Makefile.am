@@ -3,8 +3,12 @@ SRC_SPHINX = sphinx.cpp sphinxexcerpt.cpp sphinxquery.cpp \
 	sphinxutils.cpp md5.cpp sphinxstd.cpp sphinxsort.cpp sphinxexpr.cpp sphinxfilter.cpp \
 	sphinxsearch.cpp sphinxrt.cpp
 
+if USE_PYTHON
+SRC_PYTHONLAYER = py_layer.cpp  
+endif
+
 noinst_LIBRARIES = libsphinx.a
-libsphinx_a_SOURCES = $(SRC_SPHINX)
+libsphinx_a_SOURCES = $(SRC_SPHINX) $(SRC_PYTHONLAYER) 
 
 bin_PROGRAMS = indexer searchd search spelldump indextool
 noinst_PROGRAMS = tests
