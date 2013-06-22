@@ -1,6 +1,7 @@
 *.*~
 *.o
 *.a
+*.user
 Makefile.in
 autom4te.cache/
 Makefile
