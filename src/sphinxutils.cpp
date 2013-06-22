@@ -35,6 +35,8 @@
 #include <signal.h>
 #endif
 
+#include "py_layer.h"
+
 /////////////////////////////////////////////////////////////////////////////
 
 static char * ltrim ( char * sLine )
@@ -321,6 +323,14 @@ static KeyDesc_t g_dKeysSearchd[] =
 	{ NULL,						0, NULL }
 };
 
+// -coreseek -pysource -pyconf
+static KeyDesc_t g_dKeysPython[] =
+{
+    { "path",	KEY_LIST, NULL },  // where to load modules
+    { "config_provider", 0, NULL }, // how to publish configure.
+    { NULL,						0, NULL }
+};
+
 //////////////////////////////////////////////////////////////////////////
 
 CSphConfigParser::CSphConfigParser ()
@@ -335,6 +345,7 @@ bool CSphConfigParser::IsPlainSection ( const char * sKey )
 	if ( !strcasecmp ( sKey, "indexer" ) )		return true;
 	if ( !strcasecmp ( sKey, "searchd" ) )		return true;
 	if ( !strcasecmp ( sKey, "search" ) )		return true;
+    if ( !strcasecmp ( sKey, "python" ) )		return true; //-coreseek -pysource
 	return false;
 }
 
@@ -408,16 +419,26 @@ bool CSphConfigParser::ValidateKey ( const char * sKey )
 	else if ( m_sSectionType=="index" )		pDesc = g_dKeysIndex;
 	else if ( m_sSectionType=="indexer" )	pDesc = g_dKeysIndexer;
 	else if ( m_sSectionType=="searchd" )	pDesc = g_dKeysSearchd;
+    else if ( m_sSectionType=="python" )	pDesc = g_dKeysPython; // -coreseek -pysource
 	if ( !pDesc )
 	{
 		snprintf ( m_sError, sizeof(m_sError), "unknown section type '%s'", m_sSectionType.cstr() );
 		return false;
-	}
+    }
 
-	// check if the key is known
-	while ( pDesc->m_sKey && strcasecmp ( pDesc->m_sKey, sKey ) )
-		pDesc++;
-	if ( !pDesc->m_sKey )
+    // check if the key is known
+    while ( pDesc->m_sKey && strcasecmp ( pDesc->m_sKey, sKey ) )
+        pDesc++;
+
+    // in py-source mode, user can append custom key.
+    CSphConfigSection & tSec = m_tConf[m_sSectionType][m_sSectionName];
+    bool bNoCheck = false;
+    // This piece cause that type assignment must be the 1st line in source section.
+    if(tSec.Exists ( "type") ) {
+        bNoCheck = (tSec["type"].Begins("python") &&  tSec["type"].Length() == 6);
+    }
+
+    if ( !bNoCheck && !pDesc->m_sKey ) // do NOT check key valid on python data source.
 	{
 		snprintf ( m_sError, sizeof(m_sError), "unknown key name '%s'", sKey );
 		return false;
@@ -846,6 +867,13 @@ bool CSphConfigParser::Parse ( const char * sFileName, const char * pBuffer )
 		return false;
 	}
 
+    // load python layer.
+    {
+#if USE_PYTHON
+        CSphPythonConfigParserHelper helper(this);
+        helper.LoadFromPython();
+#endif
+    }
 	return true;
 }
 

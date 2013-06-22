@@ -1,0 +1,9 @@
+在 sphLoadConfig 处增加新内容。在 整个 配置文件都加载完毕之后，再次使用 Python 进行污染（动态修改）。
+
+通过 sip ，直接把 C++ 的 CSphConfigParser 暴露给 Python 空间
+
+1 创建此类对应的 PythonWrap
+2 可以调用 CSphConfigParser 的 protected 方法
+3 通过 sip 生成封装的脚本
+
+

@@ -151,5 +151,96 @@ void			cftShutdown()
 		
 }
 
+int cftCreateObject(const char* dsName, PyObject** pp)
+{
+    PyObject* main_module = PyImport_AddModule("__main__");
+
+    PyObject* m_pInstance = NULL;
+    PyObject* pFunc = PyObject_GetAttrString(main_module, "__coreseek_find_pysource");
+    PyObject* m_pTypeObj = NULL;
+    if(pFunc && PyCallable_Check(pFunc)){
+        PyObject* pArgsKey  = Py_BuildValue("(s)", dsName);
+        m_pTypeObj = PyEval_CallObject(pFunc, pArgsKey);
+        Py_XDECREF(pArgsKey);
+    } // end if
+    if (pFunc)
+        Py_XDECREF(pFunc);
+
+    if (m_pTypeObj == NULL || m_pTypeObj == Py_None) {
+        sphDie("Can NOT found python class %s.\n", dsName);
+        return 0;
+    }
+
+    if (!PyClass_Check(m_pTypeObj) && !PyType_Check(m_pTypeObj)) {
+        Py_XDECREF(m_pTypeObj);
+        sphDie("%s is NOT a Python class.\n", dsName);
+        return -1; //not a valid type file
+    }
+
+    if(!m_pTypeObj||!PyCallable_Check(m_pTypeObj)){
+        Py_XDECREF(m_pTypeObj);
+        return  -2;
+    }else{
+
+        //PyObject* pargs  = Py_BuildValue("O", pConf); //+1
+        PyObject* pArg  = Py_BuildValue("()");
+        m_pInstance  = PyEval_CallObject(m_pTypeObj, pArg);
+        if(!m_pInstance){
+            PyErr_Print();
+            Py_XDECREF(pArg);
+            Py_XDECREF(m_pTypeObj);
+            return -3; //source file error.
+        }
+        Py_XDECREF(pArg);
+    }
+    // output
+    *pp = m_pInstance;
+
+    Py_XDECREF(m_pTypeObj);
+    return 0;
+}
+
+CSphPythonConfigParserHelper::CSphPythonConfigParserHelper(CSphConfigParser* p)
+    :m_p(p), m_conf_classname("")
+{
+    if (p->m_tConf("python") && p->m_tConf["python"]("python") )
+    {
+#if USE_PYTHON
+            CSphConfigSection & hPython =  p->m_tConf["python"]["python"];
+            if(!cftInitialize(hPython))
+                    sphDie ( "Python layer's initiation failed.");
+
+            // create python object
+            if( hPython("config_provider") )
+                m_conf_classname = hPython["config_provider"];
+#else
+            sphDie ( "Python layer defined, but indexer does Not supports python. used --enbale-python to recompile.");
+#endif
+    }
+}
+
+bool  CSphPythonConfigParserHelper::LoadFromPython(){
+    if(!m_conf_classname.IsEmpty()) {
+        PyObject* m_pInstance;
+        if(cftCreateObject(m_conf_classname.cstr(), &m_pInstance) == 0) {
+           // to conf stuff.
+        }
+    }
+    return true;
+}
+
+bool CSphPythonConfigParserHelper::AddSection ( const char * sType, const char * sSection )
+{
+    return m_p->AddSection(sType, sSection);
+}
+
+void CSphPythonConfigParserHelper::AddKey ( const char * sKey, char * sValue )
+{
+    return m_p->AddKey(sKey, sValue);
+}
+
 #endif //USE_PYTHON
+
+// end of file.
+
 

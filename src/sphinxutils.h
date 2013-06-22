@@ -106,9 +106,18 @@ typedef SmallStringHash_T < CSphConfigSection >	CSphConfigType;
 /// config (hash of section types)
 typedef SmallStringHash_T < CSphConfigType >	CSphConfig;
 
+#if USE_PYTHON
+class CSphPythonConfigParserHelper;
+#endif
+
 /// simple config file
 class CSphConfigParser
 {
+
+#if USE_PYTHON
+friend class CSphPythonConfigParserHelper;
+#endif
+
 public:
 	CSphConfig		m_tConf;
 
@@ -134,7 +143,7 @@ protected:
 	bool			IsNamedSection ( const char * sKey );
 	bool			AddSection ( const char * sType, const char * sSection );
 	void			AddKey ( const char * sKey, char * sValue );
-	bool			ValidateKey ( const char * sKey );
+    bool			ValidateKey ( const char * sKey );
 
 #if !USE_WINDOWS
 	bool			TryToExec ( char * pBuffer, char * pEnd, const char * szFilename, CSphVector<char> & dResult );

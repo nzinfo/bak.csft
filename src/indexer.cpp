@@ -31,6 +31,8 @@
 	#include <unistd.h>
 #endif
 
+#include "py_layer.h"
+
 /////////////////////////////////////////////////////////////////////////////
 
 bool			g_bQuiet		= false;
@@ -1788,6 +1790,8 @@ int main ( int argc, char ** argv )
 	}
 
 	sphShutdownWordforms ();
+
+    cftShutdown();
 
 	if ( !g_bQuiet )
 	{

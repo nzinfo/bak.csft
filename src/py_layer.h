@@ -26,6 +26,21 @@
 bool			cftInitialize( const CSphConfigSection & hPython);
 void			cftShutdown();
 
+int cftCreateObject(const char* dsName, PyObject** pp); // +1 reference.
+
+class CSphPythonConfigParserHelper
+{
+public:
+                    CSphPythonConfigParserHelper(CSphConfigParser* p);
+    bool            LoadFromPython();
+    bool			AddSection ( const char * sType, const char * sSection );
+    void			AddKey ( const char * sKey, char * sValue );
+
+private:
+    CSphConfigParser* m_p;
+    CSphString		  m_conf_classname;
+};
+
 CSphSource * SpawnSourcePython ( const CSphConfigSection & hSource, const char * sSourceName);
 
 typedef struct {
