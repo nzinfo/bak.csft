@@ -275,6 +275,18 @@ struct XQQuery_t : public ISphNoncopyable
 	{
 		SafeDelete ( m_pRoot );
 	}
+
+    // coreseek json query.
+protected:
+    template <typename Writer>
+    void Serialize(Writer& writer) const {
+        // This base class just write out name-value pairs, without wrapping within an object.
+        writer.String("name");
+        writer.String(name_.c_str(), (SizeType)name_.length());	// Suppling length of string is faster.
+
+        writer.String("age");
+        writer.Uint(age_);
+    }
 };
 
 //////////////////////////////////////////////////////////////////////////////

@@ -1,6 +1,7 @@
 *.*~
 *.o
 *.a
+*.log
 *.tch
 *.user
 Makefile.in

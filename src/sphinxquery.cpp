@@ -1204,7 +1204,7 @@ bool XQParser_t::Parse ( XQQuery_t & tParsed, const char * sQuery, const ISphTok
 
 //////////////////////////////////////////////////////////////////////////
 
-#define XQDEBUG 0
+#define XQDEBUG 1
 
 #if XQDEBUG
 static void xqIndent ( int iIndent )
@@ -1254,6 +1254,8 @@ static void xqDump ( XQNode_t * pNode, const CSphSchema & tSch, int iIndent )
 
 bool sphParseExtendedQuery ( XQQuery_t & tParsed, const char * sQuery, const ISphTokenizer * pTokenizer, const CSphSchema * pSchema, CSphDict * pDict, int iStopwordStep )
 {
+    // coreseek hacking, should bypass Sphinx's parsing via `magic` header...
+    // steps: 1 check beginwith '\json:' 2 load from json. 3 check it? 4 give the hash key ?
 	XQParser_t qp;
 	bool bRes = qp.Parse ( tParsed, sQuery, pTokenizer, pSchema, pDict, iStopwordStep );
 
