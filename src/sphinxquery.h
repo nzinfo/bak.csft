@@ -18,6 +18,11 @@
 
 #include "sphinx.h"
 
+#include "rapidjson/writer.h"	// for stringify JSON
+#include "rapidjson/filestream.h"	// wrapper of C stream for prettywriter as output
+#include "rapidjson/document.h"
+#include <cstdio>
+
 //////////////////////////////////////////////////////////////////////////////
 
 enum XQStarPosition
@@ -57,6 +62,21 @@ struct XQKeyword_t
 		, m_bExpanded ( false )
 		, m_bExcluded ( false )
 	{}
+
+    // the word..
+    template <typename Writer>
+    void Serialize(Writer& writer) const {
+        /* \# \$, if # | $ at begin | end of the term, stands for m_bFieldStart | m_bFieldEnd  */
+        writer.StartObject();
+
+        writer.String("term");
+        writer.String(m_sWord.cstr());
+
+        writer.String("pos");
+        writer.Uint(m_iAtomPos);
+
+        writer.EndObject();
+    }
 };
 
 
@@ -119,6 +139,24 @@ public:
 
 		return *this;
 	}
+
+    template <typename Writer>
+    void Serialize(Writer& writer) const {
+        // m_iFieldMaxPos
+        const CSphSchema * pSchema = (const CSphSchema * )writer.getData();
+        if(pSchema && m_bFieldSpec) {
+            writer.StartArray();
+            for(int i = 0; i < SPH_MAX_FIELDS; i++){
+              if(m_dFieldMask.Test(i)){
+                  writer.String(pSchema->m_dFields[i].m_sName.cstr());
+                 printf("column %s %d\n", pSchema->m_dFields[i].m_sName.cstr(), pSchema->m_dFields[i].m_iIndex);
+              }
+            }
+            writer.EndArray();
+            printf("-------------\n");
+        }
+    }
+
 public:
 	void SetZoneSpec ( const CSphVector<int> & dZones );
 	void SetFieldSpec ( const CSphSmallBitvec& uMask, int iMaxPos );
@@ -132,9 +170,9 @@ struct XQNode_t : public ISphNoncopyable
 	XQNode_t *				m_pParent;		///< my parent node (NULL for root ones)
 
 private:
-	XQOperator_e			m_eOp;			///< operation over childen
-	int						m_iOrder;
-	int						m_iCounter;
+    XQOperator_e			m_eOp;			///< operation over childen
+    int						m_iOrder;       // cache related
+    int						m_iCounter;     // cache related.
 
 private:
 	mutable uint64_t		m_iMagicHash;
@@ -148,6 +186,64 @@ public:
 	int						m_iAtomPos;		///< atom position override (currently only used within expanded nodes)
 	bool					m_bVirtuallyPlain;	///< "virtually plain" flag (currently only used by expanded nodes)
 	bool					m_bNotWeighted;	///< this our expanded but empty word's node
+
+public:
+
+    template <typename Writer>
+    void Serialize(Writer& writer) const {
+        // FIXME: add supported `expanded` word..
+        writer.StartObject();
+
+        writer.String("op");
+        writer.String(GetOpTypeString(m_eOp));
+
+        // the limit spec
+        if(m_dSpec.m_bFieldSpec) {
+            writer.String(("spec"));
+            m_dSpec.Serialize(writer);
+        }
+
+        // child nodes.
+        writer.String(("children"));
+        writer.StartArray();
+        ARRAY_FOREACH ( i, m_dChildren )
+            m_dChildren[i]->Serialize(writer);
+        writer.EndArray();
+
+        // the words -> if is a plain node.
+        writer.String(("words"));
+        writer.StartArray();
+        ARRAY_FOREACH ( i, m_dWords )
+            m_dWords[i].Serialize(writer);
+        writer.EndArray();
+
+
+        writer.String("oparg");
+        writer.Uint(m_iOpArg);
+
+        // expanded related.
+        //writer.String("op");
+        writer.EndObject();
+    }
+
+
+
+    const char* GetOpTypeString(XQOperator_e eOp)  const{
+        switch(eOp) {
+        case SPH_QUERY_AND:  return "and";
+        case SPH_QUERY_OR:  return "or";
+        case SPH_QUERY_NOT:  return "not";
+        case SPH_QUERY_ANDNOT:  return "andnot"; //and query with not postfix term.
+        case SPH_QUERY_BEFORE:  return "before";
+        case SPH_QUERY_PHRASE:  return "phrase";
+        case SPH_QUERY_PROXIMITY:  return "proximity";
+        case SPH_QUERY_QUORUM:  return "quorum";
+        case SPH_QUERY_NEAR:  return "near";
+        case SPH_QUERY_SENTENCE:  return "sentence";
+        case SPH_QUERY_PARAGRAPH:  return "paragraph";
+        }
+        return NULL;
+    }
 
 public:
 	/// ctor
@@ -256,13 +352,14 @@ public:
 /// extended query
 struct XQQuery_t : public ISphNoncopyable
 {
-	CSphString				m_sParseError;
+    CSphString				m_sParseError;
 	CSphString				m_sParseWarning;
 
 	CSphVector<CSphString>	m_dZones;
 	XQNode_t *				m_pRoot;
 	bool					m_bSingleWord;
 
+    bool                    m_bLoadFromCache; // by coreseek caching.
 	/// ctor
 	XQQuery_t ()
 	{
@@ -277,16 +374,34 @@ struct XQQuery_t : public ISphNoncopyable
 	}
 
     // coreseek json query.
-protected:
+public:
     template <typename Writer>
     void Serialize(Writer& writer) const {
-        // This base class just write out name-value pairs, without wrapping within an object.
-        writer.String("name");
-        writer.String(name_.c_str(), (SizeType)name_.length());	// Suppling length of string is faster.
+        writer.StartObject();
 
-        writer.String("age");
-        writer.Uint(age_);
+        // NOT write SingleWord, this attribute calc dyn.
+        //writer.String("SingleWord");
+        //writer.Bool(m_bSingleWord);
+
+        if(m_dZones.GetLength()) {
+            writer.String(("zones"));
+            writer.StartArray();
+            ARRAY_FOREACH ( i, m_dZones )
+                writer.String(m_dZones[i].cstr(), (rapidjson::SizeType)m_dZones[i].Length());
+            writer.EndArray();
+        }
+
+        if(m_pRoot) {
+            writer.String("node");
+            m_pRoot->Serialize(writer);
+        }
+        writer.EndObject();
+
+        if(m_pRoot)
+           printf("hash %ld\n", m_pRoot->GetHash());
     }
+
+    int LoadJson(const char* json_ctx );
 };
 
 //////////////////////////////////////////////////////////////////////////////

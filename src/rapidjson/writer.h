@@ -34,7 +34,7 @@ public:
 	typedef typename Encoding::Ch Ch;
 
 	Writer(Stream& stream, Allocator* allocator = 0, size_t levelDepth = kDefaultLevelDepth) : 
-		stream_(stream), level_stack_(allocator, levelDepth * sizeof(Level)) {}
+		stream_(stream), level_stack_(allocator, levelDepth * sizeof(Level)), pData_(NULL) {}
 
 	//@name Implementation of Handler
 	//@{
@@ -89,6 +89,9 @@ public:
 	//! Simpler but slower overload.
 	Writer& String(const Ch* str) { return String(str, internal::StrLen(str)); }
 
+	// Sphinx Related -> pass Schema via data void*
+	void* getData() { return pData_; }
+	void  setData(void* p) { pData_ = p; }
 protected:
 	//! Information for each nested level
 	struct Level {
@@ -226,6 +229,8 @@ protected:
 
 	Stream& stream_;
 	internal::Stack<Allocator> level_stack_;
+
+	void* pData_;
 
 private:
 	// Prohibit assignment for VC C4512 warning

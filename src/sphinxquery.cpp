@@ -17,6 +17,7 @@
 #include "sphinxquery.h"
 #include "sphinxutils.h"
 #include <stdarg.h>
+#include "base64.h"
 
 //////////////////////////////////////////////////////////////////////////
 // EXTENDED PARSER RELOADED
@@ -1201,6 +1202,21 @@ bool XQParser_t::Parse ( XQQuery_t & tParsed, const char * sQuery, const ISphTok
 	tParsed.m_pRoot = m_pRoot ? m_pRoot : new XQNode_t ( *m_dStateSpec.Last() );
 	return true;
 }
+//////////////////////////////////////////////////////////////////////////
+
+int XQQuery_t::LoadJson(const char* json_ctx ) {
+    rapidjson::Document doc;
+    doc.Parse<0>(json_ctx);
+    if(doc.HasParseError()) {
+        // FIXME: report error.
+        //const char* GetParseError() const { return parseError_; }
+        m_sParseError.SetSprintf("json query error: %s at offset %d ", doc.GetParseError(), (int)doc.GetErrorOffset());
+        return -1;
+    }
+    // assign trees.
+
+    return 0;
+}
 
 //////////////////////////////////////////////////////////////////////////
 
@@ -1256,8 +1272,37 @@ bool sphParseExtendedQuery ( XQQuery_t & tParsed, const char * sQuery, const ISp
 {
     // coreseek hacking, should bypass Sphinx's parsing via `magic` header...
     // steps: 1 check beginwith '\json:' 2 load from json. 3 check it? 4 give the hash key ?
+    // steps: 2 check \cache: enable global index based caching..
+
 	XQParser_t qp;
-	bool bRes = qp.Parse ( tParsed, sQuery, pTokenizer, pSchema, pDict, iStopwordStep );
+
+    const char* sCurrentRawQuery = sQuery;
+    bool bJsonQuery = false;
+    bool bCacheResult = false;
+    // check query -- coreseek.
+    if(strncmp(sCurrentRawQuery, "\\json:", 6) == 0) {
+        // load by json.
+        sCurrentRawQuery += 6;
+        bJsonQuery = true;
+    }
+
+    if(strncmp(sCurrentRawQuery, "\\cache:", 7) == 0) {
+        // load by json.
+        sCurrentRawQuery += 7;
+        bCacheResult = true;
+    }
+    if(sCurrentRawQuery[0] == ' ') sCurrentRawQuery++;
+
+
+    bool bRes = false;
+    if(bJsonQuery) {
+        printf("I got json query `%s` \n", sCurrentRawQuery);
+        // load json ...
+        int nRet = tParsed.LoadJson(sCurrentRawQuery);
+        // FIXME: handler error .
+        bRes = (nRet == 0);
+    }else   //do origin query pqrser..
+        bRes = qp.Parse ( tParsed, sCurrentRawQuery, pTokenizer, pSchema, pDict, iStopwordStep );
 
 #ifndef NDEBUG
 	if ( bRes && tParsed.m_pRoot )
@@ -1273,9 +1318,21 @@ bool sphParseExtendedQuery ( XQQuery_t & tParsed, const char * sQuery, const ISp
 	}
 #endif
 
+    {
+        // dump the query.
+        rapidjson::MemoryStreamWriter s;
+        rapidjson::Writer<rapidjson::MemoryStreamWriter> writer(s);		// Can also use Writer for condensed formatting
+
+        writer.setData((void*)pSchema); //pass pSchema, ->> get field | zone
+
+        tParsed.Serialize(writer);
+        printf("i got it %s\n", s.str().c_str());
+    }
+
 	// moved here from ranker creation
 	// as at that point term expansion could produce many terms from expanded term and this condition got failed
 	tParsed.m_bSingleWord = ( tParsed.m_pRoot && tParsed.m_pRoot->m_dChildren.GetLength()==0 && tParsed.m_pRoot->m_dWords.GetLength()==1 );
+    tParsed.m_bLoadFromCache = bCacheResult;
 
 	return bRes;
 }
