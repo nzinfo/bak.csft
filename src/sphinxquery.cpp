@@ -1429,7 +1429,7 @@ bool sphParseExtendedQuery ( XQQuery_t & tParsed, const char * sQuery, const ISp
 
     bool bRes = false;
     if(bJsonQuery) {
-        printf("I got json query `%s` \n", sCurrentRawQuery);
+        // printf("I got json query `%s` \n", sCurrentRawQuery);
         // load json ...
         int nRet = tParsed.LoadJson(sCurrentRawQuery, pSchema);
         // FIXME: handler error .

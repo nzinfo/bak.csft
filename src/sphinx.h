@@ -2300,6 +2300,12 @@ public:
 	bool			ParseSelectList ( CSphString & sError );
 };
 
+enum ESphQueryCacheMethod
+{
+    SPH_QUERY_CACHE_PUT,
+    SPH_QUERY_CACHE_GET,
+    SPH_QUERY_CACHE_NONE
+};
 
 /// search query meta-info
 class CSphQueryResultMeta
@@ -2329,6 +2335,9 @@ public:
 
 	CSphString				m_sError;			///< error message
 	CSphString				m_sWarning;			///< warning message
+
+    CSphString              m_sCacheKey;        ///< the result key
+    ESphQueryCacheMethod    m_eCacheMethod;     ///< the cache method.
 
 	CSphQueryResultMeta ();													///< ctor
 	virtual					~CSphQueryResultMeta () {}						///< dtor

@@ -22,6 +22,8 @@
 #include <ctype.h>
 #include <stdarg.h>
 
+#include "base64.h"
+
 /////////////////////////////////////////////////////////////////////////////
 
 /// my own isalpha (let's build our own theme park!)

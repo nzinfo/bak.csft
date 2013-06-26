@@ -7398,7 +7398,7 @@ CSphIndex::CSphIndex ( const char * sIndexName, const char * sFilename )
 	, m_pDict ( NULL )
 	, m_iMaxCachedDocs ( 0 )
 	, m_iMaxCachedHits ( 0 )
-	, m_sIndexName ( sIndexName )
+    , m_sIndexName ( sIndexName )
 {
 }
 
@@ -15020,7 +15020,7 @@ bool CSphIndex_VLN::MultiQuery ( const CSphQuery * pQuery, CSphQueryResult * pRe
 	{
 		pResult->m_sError = tParsed.m_sParseError;
 		return false;
-	}
+    }
 
 	// transform query if needed (quorum transform, keyword expansion, etc.)
 	sphTransformExtendedQuery ( &tParsed.m_pRoot );
@@ -15181,6 +15181,26 @@ bool CSphIndex_VLN::ParsedMultiQuery ( const CSphQuery * pQuery, CSphQueryResult
 	assert ( ppSorters );
 	assert ( !pQuery->m_sQuery.IsEmpty() && pQuery->m_eMode!=SPH_MATCH_FULLSCAN ); // scans must go through MultiScan()
 	assert ( iTag>=0 );
+
+    // coreseek cache 1 require cache, 2 get key, 3 make operate desicion ( get | put) 4 read data if get.
+    // this fucnction is the common sub-node of querying...
+    if(tXQ.m_bLoadFromCache)
+    {
+        if(tXQ.m_pRoot) {
+           // printf("ha111sh %ld\n", tParsed.m_pRoot->GetHash());
+           // change hash to key.  index_name + base64(hash);
+           char base64hash[256];
+           uint64_t hash = tXQ.m_pRoot->GetHash();
+           int base64_len = base64_encode(base64hash, (char*)&hash, sizeof(uint64_t));
+           base64hash[base64_len] = 0;
+           CSphString sCacheKey;
+           sCacheKey.SetSprintf("%s::%s", m_sIndexName.cstr(), base64hash);
+           // printf("cache key is %s::%s\n\n\n", m_sIndexName.cstr(), base64hash);
+           pResult->m_sCacheKey = sCacheKey;
+
+           // check key's existance.
+        }
+    }
 
 	// start counting
 	int64_t tmQueryStart = sphMicroTimer();
@@ -24951,6 +24971,7 @@ CSphQueryResultMeta::CSphQueryResultMeta ()
 , m_iMultiplier ( 1 )
 , m_iMatches ( 0 )
 , m_iTotalMatches ( 0 )
+, m_eCacheMethod(SPH_QUERY_CACHE_NONE)
 {
 }
 
@@ -25013,6 +25034,9 @@ CSphQueryResultMeta & CSphQueryResultMeta::operator= ( const CSphQueryResultMeta
 	m_sWarning = tMeta.m_sWarning;
 
 	m_hWordStats = tMeta.m_hWordStats;
+
+    m_sCacheKey = tMeta.m_sCacheKey;
+    m_eCacheMethod = tMeta.m_eCacheMethod;
 
 	return *this;
 }

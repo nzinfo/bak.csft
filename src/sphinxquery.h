@@ -419,8 +419,8 @@ public:
         }
         writer.EndObject();
 
-        if(m_pRoot)
-           printf("hash %ld\n", m_pRoot->GetHash());
+        //if(m_pRoot)
+        //   printf("hash %ld\n", m_pRoot->GetHash());
     }
 
     int LoadJson(const char* json_ctx,  const CSphSchema * pSchema );
