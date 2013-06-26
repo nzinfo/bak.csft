@@ -1204,17 +1204,150 @@ bool XQParser_t::Parse ( XQQuery_t & tParsed, const char * sQuery, const ISphTok
 }
 //////////////////////////////////////////////////////////////////////////
 
-int XQQuery_t::LoadJson(const char* json_ctx ) {
+int XQQuery_t::LoadJson(const char* json_ctx , const CSphSchema * pSchema ) {
     rapidjson::Document doc;
     doc.Parse<0>(json_ctx);
+    m_sParseError.SetSprintf("");
     if(doc.HasParseError()) {
         // FIXME: report error.
         //const char* GetParseError() const { return parseError_; }
         m_sParseError.SetSprintf("json query error: %s at offset %d ", doc.GetParseError(), (int)doc.GetErrorOffset());
         return -1;
     }
-    // assign trees.
 
+    // assign trees.
+    if(!doc.IsObject()) {
+        m_sParseError.SetSprintf("json query error: invalid query json object. ");
+        return -2;
+    }
+
+    // load zone
+    if(doc.HasMember("zones")) {
+        rapidjson::Value& t = doc["zones"];
+        if(t.IsArray()) {
+            for (rapidjson::SizeType i = 0; i < t.Size(); i++)
+                m_dZones.Add(t[i].GetString());
+        }
+    }
+
+    // load node
+    if(doc.HasMember("node")) {
+        rapidjson::Value& t = doc["node"];
+        if(t.IsObject()){
+            if(m_pRoot)
+                delete m_pRoot;
+
+            XQLimitSpec_t emptySpec;
+            XQNode_t* tm_node = new XQNode_t(emptySpec);
+            if(tm_node->LoadJsonValue(t, pSchema, m_sParseError) != 0)
+                goto JSON_ERROR_FORMAT;
+            m_pRoot = tm_node;
+        }
+    }
+    return 0;
+
+JSON_ERROR_FORMAT:
+    //printf("error str is %s, %d\n", m_sParseError.cstr(), m_sParseError.Length());
+    if(m_sParseError.Length() == 0)
+        m_sParseError.SetSprintf("json query error: invalid query json object. ");
+    return -2;
+}
+
+int XQNode_t::LoadJsonValue(rapidjson::Document::ValueType& val_obj,  const CSphSchema * pSchema, CSphString & sError)
+{
+    // set op
+    if(val_obj.HasMember("op")) {
+        rapidjson::Value& v = val_obj["op"];
+        if(!v.IsString())
+            return -1;
+        m_eOp = GetOpTypeViaString( (const BYTE*)v.GetString() );
+    }
+
+    // update field spec
+    if(val_obj.HasMember("spec")) {
+        // FIXME: should `COPY` the spec.
+        // if has parent -> copy from parent, if has left , copy from left.
+        rapidjson::Value& v = val_obj["spec"];
+        if(m_dSpec.LoadJsonValue(v, pSchema, sError) != 0)
+            return -2;
+    }
+    // process children
+    if(val_obj.HasMember("children")) {
+        rapidjson::Value& t = val_obj["children"];
+        if(t.IsArray()) {
+            XQNode_t* tm_prev_node = NULL;
+            for (rapidjson::SizeType i = 0; i < t.Size(); i++) {
+                XQLimitSpec_t emptySpec;
+                XQNode_t* tm_node = new XQNode_t(emptySpec);
+                tm_node->LoadJsonValue(t[i], pSchema, sError);
+                // check spec.
+                if(!t[i].HasMember("spec")) {
+                    // check prev
+                    if(tm_prev_node && tm_prev_node->m_dSpec.m_bFieldSpec) // apply left slibe
+                        tm_node->SetFieldSpec(tm_prev_node->m_dSpec.m_dFieldMask, tm_prev_node->m_dSpec.m_iFieldMaxPos);
+                    else
+                        if(m_dSpec.m_bFieldSpec) // apply parent -> self.
+                            tm_node->SetFieldSpec(m_dSpec.m_dFieldMask, m_dSpec.m_iFieldMaxPos);
+                }
+                m_dChildren.Add ( tm_node );
+                tm_prev_node = tm_node;
+            }
+        }
+    }
+    // process words -> if is term query node.
+    if(val_obj.HasMember("words")) {
+        rapidjson::Value& t = val_obj["words"];
+        if(t.IsArray()) {
+            for (rapidjson::SizeType i = 0; i < t.Size(); i++) {
+                XQKeyword_t tm_node;
+                tm_node.LoadJsonValue(t[i]);
+                m_dWords.Add ( tm_node );
+            }
+        }
+    }
+    // process oparg
+    if(val_obj.HasMember("oparg")) {
+        rapidjson::Value& t = val_obj["oparg"];
+        m_iOpArg = t.GetInt();
+    }
+    // FIXME: do expanding..
+
+    return 0;
+}
+
+int XQKeyword_t::LoadJsonValue(rapidjson::Document::ValueType& val_obj){
+    // do term
+    if(val_obj.HasMember("term")) {
+        rapidjson::Value& t = val_obj["term"];
+        m_sWord = t.GetString();
+    }
+
+    // do pos
+    if(val_obj.HasMember("pos")) {
+        rapidjson::Value& t = val_obj["pos"];
+        m_iAtomPos = t.GetInt();
+    }
+    return 0;
+}
+
+int XQLimitSpec_t::LoadJsonValue(rapidjson::Document::ValueType& val_obj, const CSphSchema * pSchema, CSphString & sError)
+{
+    // must is array.
+    if(val_obj.IsArray()) {
+
+      for (rapidjson::SizeType j = 0; j < val_obj.Size(); j++) {
+          int nIndex = pSchema->GetFieldIndex(val_obj[j].GetString());
+          if(nIndex >= 0)
+          {
+              m_dFieldMask.Set(nIndex);
+              printf("debug set %s\n", pSchema->m_dFields[nIndex].m_sName.cstr());
+          }else{
+              // field not found...  //
+              sError.SetSprintf("json query error: field %s not found.", val_obj[j].GetString());
+              return -2;
+          }
+      } // end for field mask
+    }
     return 0;
 }
 
@@ -1298,7 +1431,7 @@ bool sphParseExtendedQuery ( XQQuery_t & tParsed, const char * sQuery, const ISp
     if(bJsonQuery) {
         printf("I got json query `%s` \n", sCurrentRawQuery);
         // load json ...
-        int nRet = tParsed.LoadJson(sCurrentRawQuery);
+        int nRet = tParsed.LoadJson(sCurrentRawQuery, pSchema);
         // FIXME: handler error .
         bRes = (nRet == 0);
     }else   //do origin query pqrser..

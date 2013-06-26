@@ -77,6 +77,8 @@ struct XQKeyword_t
 
         writer.EndObject();
     }
+
+    int LoadJsonValue(rapidjson::Document::ValueType& val_obj);
 };
 
 
@@ -149,13 +151,15 @@ public:
             for(int i = 0; i < SPH_MAX_FIELDS; i++){
               if(m_dFieldMask.Test(i)){
                   writer.String(pSchema->m_dFields[i].m_sName.cstr());
-                 printf("column %s %d\n", pSchema->m_dFields[i].m_sName.cstr(), pSchema->m_dFields[i].m_iIndex);
+                 //printf("column %s %d\n", pSchema->m_dFields[i].m_sName.cstr(), pSchema->m_dFields[i].m_iIndex);
               }
             }
             writer.EndArray();
-            printf("-------------\n");
+            //printf("-------------\n");
         }
     }
+
+    int LoadJsonValue(rapidjson::Document::ValueType& val_obj, const CSphSchema * pSchema, CSphString & sError);
 
 public:
 	void SetZoneSpec ( const CSphVector<int> & dZones );
@@ -226,7 +230,7 @@ public:
         writer.EndObject();
     }
 
-
+    int LoadJsonValue(rapidjson::Document::ValueType& val_obj, const CSphSchema * pSchema, CSphString & sError);
 
     const char* GetOpTypeString(XQOperator_e eOp)  const{
         switch(eOp) {
@@ -245,6 +249,24 @@ public:
         return NULL;
     }
 
+    XQOperator_e GetOpTypeViaString(const BYTE* s) const {
+        DWORD opID = sphCRC32(s);
+
+        if(opID == sphCRC32((const BYTE*)"and")) return SPH_QUERY_AND;
+        if(opID == sphCRC32((const BYTE*)"or")) return SPH_QUERY_OR;
+        if(opID == sphCRC32((const BYTE*)"not")) return SPH_QUERY_NOT;
+        if(opID == sphCRC32((const BYTE*)"andnot")) return SPH_QUERY_ANDNOT;
+        if(opID == sphCRC32((const BYTE*)"before")) return SPH_QUERY_BEFORE;
+        if(opID == sphCRC32((const BYTE*)"phrase")) return SPH_QUERY_PHRASE;
+        if(opID == sphCRC32((const BYTE*)"proximity")) return SPH_QUERY_PROXIMITY;
+        if(opID == sphCRC32((const BYTE*)"quorum")) return SPH_QUERY_QUORUM;
+        if(opID == sphCRC32((const BYTE*)"near")) return SPH_QUERY_NEAR;
+        if(opID == sphCRC32((const BYTE*)"sentence")) return SPH_QUERY_SENTENCE;
+        if(opID == sphCRC32((const BYTE*)"paragraph")) return SPH_QUERY_PARAGRAPH;
+
+        // failure...
+        return SPH_QUERY_AND;
+    }
 public:
 	/// ctor
 	explicit XQNode_t ( const XQLimitSpec_t & dSpec )
@@ -401,7 +423,7 @@ public:
            printf("hash %ld\n", m_pRoot->GetHash());
     }
 
-    int LoadJson(const char* json_ctx );
+    int LoadJson(const char* json_ctx,  const CSphSchema * pSchema );
 };
 
 //////////////////////////////////////////////////////////////////////////////
