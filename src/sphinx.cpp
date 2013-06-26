@@ -5116,6 +5116,69 @@ bool CSphFilterSettings::operator == ( const CSphFilterSettings & rhs ) const
 }
 
 /////////////////////////////////////////////////////////////////////////////
+// QUERY Cache
+/////////////////////////////////////////////////////////////////////////////
+
+class SphQueryCacheService_Dummy : public ISphQueryCacheService
+{
+public:
+                                SphQueryCacheService_Dummy () {}
+
+};
+
+
+class SphQueryCacheService_Filesystem : public ISphQueryCacheService
+{
+public:
+                                SphQueryCacheService_Filesystem () {}
+public:
+       /// setup query cache using given settings
+       virtual void			    Setup ( const CSphQueryCacheSettings & tSettings );
+};
+
+/// ISphQueryCacheService
+ISphQueryCacheService *	ISphQueryCacheService::Create ( const CSphQueryCacheSettings & tSettings, CSphString & sError )
+{
+    CSphScopedPtr<ISphQueryCacheService> pCache ( NULL );
+
+    switch ( tSettings.m_iType )
+    {
+        case QUERYCACHE_NONE:	pCache = sphCreateDummyQueryCache (); break;
+        case QUERYCACHE_FS:	pCache = sphCreateFilesystemQueryCache (); break;
+        default:
+            sError.SetSprintf ( "failed to create query cache ");
+            return NULL;
+    }
+
+    pCache->Setup ( tSettings );
+
+    return pCache.LeakPtr ();
+}
+
+void ISphQueryCacheService::Setup ( const CSphQueryCacheSettings & tSettings )
+{
+    m_sCacheProviderURI = tSettings.m_sCacheProviderURI;
+}
+
+/// SphQueryCacheService_Filesystem
+void SphQueryCacheService_Filesystem::Setup ( const CSphQueryCacheSettings & tSettings )
+{
+    ISphQueryCacheService::Setup(tSettings);
+    //m_sCacheProviderURI = tSettings.m_sCacheProviderURI;
+}
+
+/// the dummy(do nothing query cache)
+ISphQueryCacheService *			sphCreateDummyQueryCache ()
+{
+    return new SphQueryCacheService_Dummy();
+}
+
+/// the query cache store result in a disk-dir.
+ISphQueryCacheService *			sphCreateFilesystemQueryCache (){
+    return new SphQueryCacheService_Filesystem();
+}
+
+/////////////////////////////////////////////////////////////////////////////
 // QUERY
 /////////////////////////////////////////////////////////////////////////////
 
@@ -7396,6 +7459,7 @@ CSphIndex::CSphIndex ( const char * sIndexName, const char * sFilename )
 	, m_bId32to64 ( false )
 	, m_pTokenizer ( NULL )
 	, m_pDict ( NULL )
+    , m_pCache (NULL)
 	, m_iMaxCachedDocs ( 0 )
 	, m_iMaxCachedHits ( 0 )
     , m_sIndexName ( sIndexName )

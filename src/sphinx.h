@@ -631,6 +631,58 @@ ISphTokenizer *			sphCreateUTF8Tokenizer ();
 ISphTokenizer *			sphCreateUTF8NgramTokenizer ();
 
 /////////////////////////////////////////////////////////////////////////////
+// global external query / result cache, the result MUST compressed.
+//  - by file ?
+//  - by memcached ?
+/////////////////////////////////////////////////////////////////////////////
+struct CSphQueryCacheSettings
+{
+    int					m_iType;
+    CSphString			m_sCacheProviderURI;
+};
+
+class ISphQueryCacheService
+{
+public:
+    /// trivial ctor
+                                    ISphQueryCacheService() {}
+
+    /// trivial dtor
+    virtual							~ISphQueryCacheService () {}
+
+    /// setup query cache using given settings
+    virtual void					Setup ( const CSphQueryCacheSettings & tSettings );
+
+public:
+    int Put(const CSphString& sKey, int ttl, const BYTE* pData, int iLength) {
+    	return -1;
+    }
+
+    int Get(const CSphString& sKey) {
+    	return -1;
+    }
+
+    bool Exist(const CSphString& sKey) {
+    	return false;
+    }
+
+public:
+    /// create a tokenizer using the given settings
+    static ISphQueryCacheService *			Create ( const CSphQueryCacheSettings & tSettings, CSphString & sError );
+
+protected:
+    CSphString m_sCacheProviderURI;
+
+};
+
+/// the dummy(do nothing query cache)
+ISphQueryCacheService *			sphCreateDummyQueryCache ();
+
+/// the query cache store result in a disk-dir.
+ISphQueryCacheService *			sphCreateFilesystemQueryCache ();
+
+
+/////////////////////////////////////////////////////////////////////////////
 // DICTIONARIES
 /////////////////////////////////////////////////////////////////////////////
 
@@ -2649,6 +2701,10 @@ public:
 	void						SetTokenizer ( ISphTokenizer * pTokenizer );
 	ISphTokenizer *				GetTokenizer () const { return m_pTokenizer; }
 	ISphTokenizer *				LeakTokenizer ();
+	
+	void						SetQueryCache ( ISphQueryCacheService * pCache ) { m_pCache = pCache; }
+	ISphQueryCacheService *		GetQueryCache () const { return m_pCache; }
+
 	void						SetDictionary ( CSphDict * pDict );
 	CSphDict *					GetDictionary () const { return m_pDict; }
 	CSphDict *					LeakDictionary ();
@@ -2772,6 +2828,8 @@ protected:
 
 	ISphTokenizer *				m_pTokenizer;
 	CSphDict *					m_pDict;
+
+    ISphQueryCacheService *     m_pCache;
 
 	int							m_iMaxCachedDocs;
 	int							m_iMaxCachedHits;

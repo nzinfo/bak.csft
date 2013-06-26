@@ -157,6 +157,13 @@ enum
 	TOKENIZER_NGRAM	= 3
 };
 
+enum
+{
+    QUERYCACHE_NONE         = 1,
+    QUERYCACHE_FS           = 2,
+    QUERYCACHE_MEMCACHED    = 3
+};
+
 /// load config file
 const char *	sphLoadConfig ( const char * sOptConfig, bool bQuiet, CSphConfigParser & cp );
 

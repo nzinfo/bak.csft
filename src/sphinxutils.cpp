@@ -199,6 +199,7 @@ static KeyDesc_t g_dKeysIndex[] =
 {
 	{ "source",					KEY_LIST, NULL },
 	{ "path",					0, NULL },
+    { "query_cache",			0, NULL },  // the query cache uri.  -> file? -> memcached?
 	{ "docinfo",				0, NULL },
 	{ "mlock",					0, NULL },
 	{ "morphology",				0, NULL },
@@ -1053,6 +1054,20 @@ bool sphFixupIndexSettings ( CSphIndex * pIndex, const CSphConfigSection & hInde
 		ISphTokenizer * pTokenFilter = ISphTokenizer::CreateTokenFilter ( pTokenizer, pIndex->GetDictionary ()->GetMultiWordforms () );
 		pIndex->SetTokenizer ( pTokenFilter ? pTokenFilter : pTokenizer );
 	}
+
+	if ( !pIndex->GetQueryCache () )
+	{
+        CSphQueryCacheSettings tSettings;
+        tSettings.m_iType = QUERYCACHE_NONE;
+		if ( hIndex("query_cache") ) // Cache can be empty, -> dummy cache. 
+		{
+            // check type.
+            tSettings.m_sCacheProviderURI = hIndex.GetStr ( "query_cache" ); // check valid uri?
+            ISphQueryCacheService * pCache = ISphQueryCacheService::Create(tSettings, sError);
+            pIndex->SetQueryCache(pCache);
+		}
+
+    }
 
 	if ( !pIndex->IsStripperInited () )
 	{
