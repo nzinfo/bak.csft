@@ -7380,16 +7380,23 @@ void SendSearchResponse ( SearchHandler_c & tHandler, InputBuffer_c & tReq, int 
 
 	} else
 	{
-		ARRAY_FOREACH ( i, tHandler.m_dQueries )
+        // fix the result cache...
+        ARRAY_FOREACH ( i, tHandler.m_dQueries ) {
+            printf("result ... the cache key is %s\n", tHandler.m_dResults[i].m_sCacheKey.cstr());
 			iReplyLen += CalcResultLength ( iVer, &tHandler.m_dResults[i], tHandler.m_dResults[i].m_dTag2Pools, bExtendedStat );
+        }
 
 		// send it
 		tOut.SendWord ( (WORD)SEARCHD_OK );
 		tOut.SendWord ( VER_COMMAND_SEARCH );
 		tOut.SendInt ( iReplyLen );
 
-		ARRAY_FOREACH ( i, tHandler.m_dQueries )
+        ARRAY_FOREACH ( i, tHandler.m_dQueries ) {
+            // make a wrapper of tOut
 			SendResult ( iVer, tOut, &tHandler.m_dResults[i], tHandler.m_dResults[i].m_dTag2Pools, bExtendedStat );
+            // get all data -> callback
+            // save to cache...
+        }
 	}
 
 	tOut.Flush ();

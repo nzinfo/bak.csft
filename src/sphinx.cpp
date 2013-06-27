@@ -5123,6 +5123,11 @@ class SphQueryCacheService_Dummy : public ISphQueryCacheService
 {
 public:
                                 SphQueryCacheService_Dummy () {}
+public:
+    virtual bool Exist(const CSphString& sKey) {
+        printf("i got a checker %s\n" , sKey.cstr());
+        return false;
+    }
 
 };
 
@@ -15263,6 +15268,10 @@ bool CSphIndex_VLN::ParsedMultiQuery ( const CSphQuery * pQuery, CSphQueryResult
            pResult->m_sCacheKey = sCacheKey;
 
            // check key's existance.
+           if(this->GetQueryCache()->Exist(sCacheKey))
+               pResult->m_eCacheMethod = SPH_QUERY_CACHE_GET;
+           // FIXME: write query log ?
+           // return true ?
         }
     }
 

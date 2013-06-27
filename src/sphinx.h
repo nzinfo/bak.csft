@@ -641,6 +641,19 @@ struct CSphQueryCacheSettings
     CSphString			m_sCacheProviderURI;
 };
 
+class ISphOutputStream
+{
+public:
+    int WriteBytes(const BYTE* pData, int iLength) {
+        return 0;
+    }
+
+    // get all data wrote.
+    const BYTE* GetData(int* piLength) {
+        return NULL;
+    }
+};
+
 class ISphQueryCacheService
 {
 public:
@@ -654,15 +667,16 @@ public:
     virtual void					Setup ( const CSphQueryCacheSettings & tSettings );
 
 public:
-    int Put(const CSphString& sKey, int ttl, const BYTE* pData, int iLength) {
+    virtual int Put(const CSphString& sKey, int ttl, const BYTE* pData, int iLength, bool bFailureIfExist = false) {
     	return -1;
     }
 
-    int Get(const CSphString& sKey) {
+    virtual int Get(const CSphString& sKey, ISphOutputStream& aStream) {
+        /* write the cache data -> stream */
     	return -1;
     }
 
-    bool Exist(const CSphString& sKey) {
+    virtual bool Exist(const CSphString& sKey) {
     	return false;
     }
 

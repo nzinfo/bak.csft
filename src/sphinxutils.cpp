@@ -1063,10 +1063,11 @@ bool sphFixupIndexSettings ( CSphIndex * pIndex, const CSphConfigSection & hInde
 		{
             // check type.
             tSettings.m_sCacheProviderURI = hIndex.GetStr ( "query_cache" ); // check valid uri?
-            ISphQueryCacheService * pCache = ISphQueryCacheService::Create(tSettings, sError);
-            pIndex->SetQueryCache(pCache);
+            if(tSettings.m_sCacheProviderURI.Begins("file://") == true)
+                tSettings.m_iType = QUERYCACHE_FS;
 		}
-
+        ISphQueryCacheService * pCache = ISphQueryCacheService::Create(tSettings, sError);
+        pIndex->SetQueryCache(pCache);
     }
 
 	if ( !pIndex->IsStripperInited () )
