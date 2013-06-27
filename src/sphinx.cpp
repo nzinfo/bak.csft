@@ -15268,10 +15268,20 @@ bool CSphIndex_VLN::ParsedMultiQuery ( const CSphQuery * pQuery, CSphQueryResult
            pResult->m_sCacheKey = sCacheKey;
 
            // check key's existance.
-           if(this->GetQueryCache()->Exist(sCacheKey))
+           if(this->GetQueryCache()->Exist(sCacheKey)) {
+           // if(1){
                pResult->m_eCacheMethod = SPH_QUERY_CACHE_GET;
-           // FIXME: write query log ?
-           // return true ?
+               pResult->m_pCache = GetQueryCache();  // pass this for a better code style.
+               // load data
+               // FIXME: write query log ?
+               // return true ?
+               return true;
+           }
+           else{
+               pResult->m_eCacheMethod = SPH_QUERY_CACHE_PUT;
+               pResult->m_pCache = GetQueryCache(); // needs pass this , in order to update cache.
+               // do normal query.
+           }
         }
     }
 
@@ -25045,6 +25055,7 @@ CSphQueryResultMeta::CSphQueryResultMeta ()
 , m_iMatches ( 0 )
 , m_iTotalMatches ( 0 )
 , m_eCacheMethod(SPH_QUERY_CACHE_NONE)
+, m_pCache(NULL)
 {
 }
 

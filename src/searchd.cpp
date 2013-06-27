@@ -2272,7 +2272,7 @@ int sphSockRead ( int iSock, void * buf, int iLen, int iReadTimeout, bool bIntr 
 class NetOutputBuffer_c
 {
 public:
-	explicit	NetOutputBuffer_c ( int iSock );
+    explicit	NetOutputBuffer_c ( int iSock );
 
 	bool		SendInt ( int iValue )			{ return SendT<int> ( htonl ( iValue ) ); }
 	bool		SendAsDword ( int64_t iValue ) ///< sends the 32bit MAX_UINT if the value is greater than it.
@@ -2304,6 +2304,9 @@ public:
 	int			GetSentCount () { return m_iSent; }
 	void		FreezeBlock ( const char * sError, int iLen );
 
+public:
+    void        SetOutputFilter(ISphOutputStream* pS) { m_pStream = pS; }
+
 protected:
 	BYTE		m_dBuffer[NETOUTBUF];	///< my buffer
 	BYTE *		m_pBuffer;			///< my current buffer position
@@ -2315,6 +2318,8 @@ protected:
 	bool		m_bFlushEnabled;	///< in frozen state we never flush until special command
 	BYTE *		m_pSize;			///< the pointer to the size of frozen block
 
+    ISphOutputStream* m_pStream;
+
 protected:
 	bool		SetError ( bool bValue );	///< set error flag
 	bool		FlushIf ( int iToAdd );		///< flush if there's not enough free space to add iToAdd bytes
@@ -2324,6 +2329,79 @@ public:
 	template < typename T > bool	SendT ( T tValue );							///< (was) protected to avoid network-vs-host order bugs
 };
 
+class SphOutputStream_CacheLoader : public ISphOutputStream
+{
+protected:
+    const char* m_sFilename;
+    // int m_iLockFD;
+    std::ostringstream oss;
+};
+
+class SphOutputStream_CacheHook : public ISphOutputStream
+{
+protected:
+    const char* m_sFilename;
+    // int m_iLockFD;
+    std::ostringstream oss;
+    ISphQueryCacheService * m_pCache;
+    int m_iTotalSize;
+public:
+    SphOutputStream_CacheHook(const char* sKey, ISphQueryCacheService* service) {
+        // create new file.
+        // m_sFilename.SetSprintf("%s", spFilename);
+        // printf("set ouptut file is %s. \n", m_sFilename.cstr());
+        /*
+        m_sFilename = spFilename;
+        m_iLockFD = ::open ( m_sFilename, SPH_O_NEW_FAILURE_IF_EXIST, 0644 );
+        if ( m_iLockFD<0 )
+        {
+            // printf("opening %s file failed: %s\n", m_sFilename, strerror(errno));
+            // might pre exist...
+            sphLogDebug ( "failed to open %s: %s", m_sFilename, strerror(errno) );
+            return;
+        }
+
+        if ( !sphLockEx ( m_iLockFD, false ) )
+        {
+            sphLogDebug ( "failed to lock %s: %s", m_sFilename, strerror(errno) );
+            ::close ( m_iLockFD );
+            m_iLockFD = -1;
+            return;
+        }
+        sphLogDebug ( "lock %s success", m_sFilename );
+        */
+        m_pCache = service;
+        m_iTotalSize = 0;
+    }
+
+    ~SphOutputStream_CacheHook() {
+        //if(m_iLockFD > 0)
+        //    ::close ( m_iLockFD );
+    }
+
+public:
+    virtual int WriteBytes(const BYTE* pData, int iLength) {
+        /* if*/
+        printf("got data %d\n", iLength);
+        // return ::write(m_iLockFD, pData, iLength);
+        oss.write((const char*)pData, iLength);
+        return iLength;
+    }
+
+    virtual int Flush()
+    {
+        BYTE buf[1024*1024];
+        int m_iLockFD = ::open ( "/tmp/q2.tmp", SPH_O_NEW_FAILURE_IF_EXIST, 0644 );
+        //oss.read(buf, m_iTotalSize);
+        // ::write(m_iLockFD, (const void *)buf, m_iTotalSize);
+        return 0;
+    }
+
+    // get all data wrote.
+    virtual const BYTE* GetData(int* piLength) {
+        return NULL;
+    }
+};
 
 /// generic request buffer
 class InputBuffer_c
@@ -2405,6 +2483,7 @@ NetOutputBuffer_c::NetOutputBuffer_c ( int iSock )
 	, m_bError ( false )
 	, m_iSent ( 0 )
 	, m_bFlushEnabled ( true )
+    , m_pStream(NULL)
 {
 	assert ( m_iSock>0 );
 }
@@ -2602,7 +2681,10 @@ bool NetOutputBuffer_c::Flush ( bool bUnfreeze )
 
 	const int64_t tmMaxTimer = sphMicroTimer() + g_iWriteTimeout*1000000; // in microseconds
 	while ( !m_bError )
-	{
+    {
+        // notify data callback.
+        if(m_pStream)
+            m_pStream->WriteBytes((const BYTE*)pBuffer, iLen);
 		int iRes = sphSockSend ( m_iSock, pBuffer, iLen );
 		if ( iRes < 0 )
 		{
@@ -7380,10 +7462,24 @@ void SendSearchResponse ( SearchHandler_c & tHandler, InputBuffer_c & tReq, int 
 
 	} else
 	{
+        BYTE buffer[1024*1024];
         // fix the result cache...
         ARRAY_FOREACH ( i, tHandler.m_dQueries ) {
             printf("result ... the cache key is %s\n", tHandler.m_dResults[i].m_sCacheKey.cstr());
-			iReplyLen += CalcResultLength ( iVer, &tHandler.m_dResults[i], tHandler.m_dResults[i].m_dTag2Pools, bExtendedStat );
+            // quick & dirty test.
+            if(0)
+            {
+                int m_iLockFD;
+                m_iLockFD = ::open ( "/tmp/q1.tmp", SPH_O_READ, 0644 );
+                ssize_t file_len = ::read(m_iLockFD, buffer, 1024*1024);
+                iReplyLen += file_len; // i have only one query ... good tesing.
+                ::close(m_iLockFD);
+                printf("cache length is %d\n ", file_len);
+            }else{
+                int res_len = CalcResultLength ( iVer, &tHandler.m_dResults[i], tHandler.m_dResults[i].m_dTag2Pools, bExtendedStat );
+                iReplyLen += res_len;
+                printf("res length is %d\n ", res_len);
+            }
         }
 
 		// send it
@@ -7393,9 +7489,14 @@ void SendSearchResponse ( SearchHandler_c & tHandler, InputBuffer_c & tReq, int 
 
         ARRAY_FOREACH ( i, tHandler.m_dQueries ) {
             // make a wrapper of tOut
-			SendResult ( iVer, tOut, &tHandler.m_dResults[i], tHandler.m_dResults[i].m_dTag2Pools, bExtendedStat );
-            // get all data -> callback
-            // save to cache...
+            if(tHandler.m_dResults[i].m_eCacheMethod == SPH_QUERY_CACHE_PUT) {
+                SphOutputStream_CacheHook hook(tHandler.m_dResults[i].m_sCacheKey.cstr(), \
+                                               tHandler.m_dResults[i].m_pCache);
+                tOut.SetOutputFilter(&hook);
+                SendResult ( iVer, tOut, &tHandler.m_dResults[i], tHandler.m_dResults[i].m_dTag2Pools, bExtendedStat );
+                hook.Flush();
+            }else
+                SendResult ( iVer, tOut, &tHandler.m_dResults[i], tHandler.m_dResults[i].m_dTag2Pools, bExtendedStat );
         }
 	}
 

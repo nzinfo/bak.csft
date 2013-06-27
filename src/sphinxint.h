@@ -36,6 +36,7 @@
 
 #define SPH_O_READ	( O_RDONLY | SPH_O_BINARY )
 #define SPH_O_NEW	( O_CREAT | O_RDWR | O_TRUNC | SPH_O_BINARY )
+#define SPH_O_NEW_FAILURE_IF_EXIST ( O_CREAT | O_EXCL | O_RDWR | SPH_O_BINARY )
 
 #define MVA_DOWNSIZE		DWORD			// MVA32 offset type
 #define MVA_OFFSET_MASK		0x7fffffffUL	// MVA offset mask

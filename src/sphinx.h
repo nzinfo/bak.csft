@@ -644,13 +644,18 @@ struct CSphQueryCacheSettings
 class ISphOutputStream
 {
 public:
-    int WriteBytes(const BYTE* pData, int iLength) {
+    virtual int WriteBytes(const BYTE* pData, int iLength) {
         return 0;
     }
 
     // get all data wrote.
-    const BYTE* GetData(int* piLength) {
+    virtual const BYTE* GetData(int* piLength) {
         return NULL;
+    }
+
+    virtual int Flush()
+    {
+        return 0;
     }
 };
 
@@ -669,6 +674,10 @@ public:
 public:
     virtual int Put(const CSphString& sKey, int ttl, const BYTE* pData, int iLength, bool bFailureIfExist = false) {
     	return -1;
+    }
+
+    virtual int Append(const CSphString& sKey, int ttl, const BYTE* pData, int iLength, bool bFailureIfExist = false) {
+        return -1;
     }
 
     virtual int Get(const CSphString& sKey, ISphOutputStream& aStream) {
@@ -2404,6 +2413,8 @@ public:
 
     CSphString              m_sCacheKey;        ///< the result key
     ESphQueryCacheMethod    m_eCacheMethod;     ///< the cache method.
+
+    ISphQueryCacheService*  m_pCache;
 
 	CSphQueryResultMeta ();													///< ctor
 	virtual					~CSphQueryResultMeta () {}						///< dtor
